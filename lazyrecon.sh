@@ -7,12 +7,12 @@
 #
 #
 ########################################
-auquatoneThreads=5
-subdomainThreads=10
-dirsearchThreads=50
-dirsearchWordlist=~/tools/dirsearch/db/dicc.txt
-massdnsWordlist=~/tools/SecLists/Discovery/DNS/clean-jhaddix-dns.txt
-chromiumPath=/snap/bin/chromium
+# auquatoneThreads=5
+# subdomainThreads=10
+# dirsearchThreads=50
+# dirsearchWordlist=~/tools/dirsearch/db/dicc.txt
+# massdnsWordlist=~/tools/SecLists/Discovery/DNS/clean-jhaddix-dns.txt
+# chromiumPath=/snap/bin/chromium
 ########################################
 # Happy Hunting
 ########################################
@@ -63,11 +63,11 @@ fi
 
 discovery(){
 	hostalive $domain
-	cleandirsearch $domain
+	#cleandirsearch $domain
 	aqua $domain
 	cleanup $domain
 	waybackrecon $domain
-	dirsearcher
+	#dirsearcher
 }
 
 waybackrecon () {
@@ -98,7 +98,7 @@ cleanup(){
 
 hostalive(){
 echo "Probing for live hosts..."
-cat ./$domain/$foldername/alldomains.txt | sort -u | httprobe -c 50 -t 3000 >> ./$domain/$foldername/responsive.txt
+cat ./$domain/$foldername/alldomains.txt | sort -u | httpx -t 1 -rlm 10 >> ./$domain/$foldername/responsive.txt
 cat ./$domain/$foldername/responsive.txt | sed 's/\http\:\/\///g' |  sed 's/\https\:\/\///g' | sort -u | while read line; do
 probeurl=$(cat ./$domain/$foldername/responsive.txt | sort -u | grep -m 1 $line)
 echo "$probeurl" >> ./$domain/$foldername/urllist.txt
@@ -110,8 +110,8 @@ echo  "${yellow}Total of $(wc -l ./$domain/$foldername/urllist.txt | awk '{print
 recon(){
 
   echo "${green}Recon started on $domain ${reset}"
-  echo "Listing subdomains using sublister..."
-  python ~/tools/Sublist3r/sublist3r.py -d $domain -t 10 -v -o ./$domain/$foldername/$domain.txt > /dev/null
+  echo "Listing subdomains using subfinder..."
+  subfinder -rl 1 -t 1 -o ./$domain/$foldername/$domain.txt > /dev/null
   echo "Checking certspotter..."
   curl -s https://certspotter.com/api/v0/certs\?domain\=$domain | jq '.[].dns_names[]' | sed 's/\"//g' | sed 's/\*\.//g' | sort -u | grep $domain >> ./$domain/$foldername/$domain.txt
   nsrecords $domain
@@ -137,38 +137,47 @@ excludedomains(){
   unset IFS
 }
 
-dirsearcher(){
 
-echo "Starting dirsearch..."
-cat ./$domain/$foldername/urllist.txt | xargs -P$subdomainThreads -I % sh -c "python3 ~/tools/dirsearch/dirsearch.py -e php,asp,aspx,jsp,html,zip,jar -w $dirsearchWordlist -t $dirsearchThreads -u % | grep Target && tput sgr0 && ./lazyrecon.sh -r $domain -r $foldername -r %"
-}
+# Use other tool instead
+# https://github.com/maurosoria/dirsearch
+# dirsearcher(){
+
+# echo "Starting dirsearch..."
+# cat ./$domain/$foldername/urllist.txt | xargs -P$subdomainThreads -I % sh -c "python3 ~/tools/dirsearch/dirsearch.py -e php,asp,aspx,jsp,html,zip,jar -w $dirsearchWordlist -t $dirsearchThreads -u % | grep Target && tput sgr0 && ./lazyrecon.sh -r $domain -r $foldername -r %"
+# }
 
 aqua(){
 echo "Starting aquatone scan..."
-cat ./$domain/$foldername/urllist.txt | aquatone -chrome-path $chromiumPath -out ./$domain/$foldername/aqua_out -threads $auquatoneThreads -silent
+cat ./$domain/$foldername/urllist.txt | aquatone -threads 1 -silent -out ./$domain/$foldername/aqua_out 
 }
 
-searchcrtsh(){
- ~/tools/massdns/scripts/ct.py $domain 2>/dev/null > ./$domain/$foldername/tmp.txt
- [ -s ./$domain/$foldername/tmp.txt ] && cat ./$domain/$foldername/tmp.txt | ~/tools/massdns/bin/massdns -r ~/tools/massdns/lists/resolvers.txt -t A -q -o S -w  ./$domain/$foldername/crtsh.txt
- cat ./$domain/$foldername/$domain.txt | ~/tools/massdns/bin/massdns -r ~/tools/massdns/lists/resolvers.txt -t A -q -o S -w  ./$domain/$foldername/domaintemp.txt
+# dont use until teste alone
+# searchcrtsh(){
+#  ~/tools/massdns/scripts/ct.py $domain 2>/dev/null >  ./$domain/$foldername/crtsh.txt
+#  cat ./$domain/$foldername/$domain.txt | ~/tools/massdns/bin/massdns -r ~/tools/massdns/lists/resolvers.txt -t A -q -o S -w  ./$domain/$foldername/domaintemp.txt
+# }
+
+searchcrtsh() {
+  python3 ctfr.py -d $domain -o ./$domain/$foldername/crtsh.txt 2>/dev/null
 }
 
-mass(){
- ~/tools/massdns/scripts/subbrute.py $massdnsWordlist $domain | ~/tools/massdns/bin/massdns -r ~/tools/massdns/lists/resolvers.txt -t A -q -o S | grep -v 142.54.173.92 > ./$domain/$foldername/mass.txt
-}
+# dont use bruteforce
+# mass(){
+#  ~/tools/massdns/scripts/subbrute.py $massdnsWordlist $domain | ~/tools/massdns/bin/massdns -r ~/tools/massdns/lists/resolvers.txt -t A -q -o S | grep -v 142.54.173.92 > ./$domain/$foldername/mass.txt
+# }
+
 nsrecords(){
                 echo "Checking http://crt.sh"
                 searchcrtsh $domain
-                echo "Starting Massdns Subdomain discovery this may take a while"
-                mass $domain > /dev/null
-                echo "Massdns finished..."
+                # echo "Starting Massdns Subdomain discovery this may take a while"
+                # mass $domain > /dev/null
+                # echo "Massdns finished..."
                 echo "${green}Started dns records check...${reset}"
                 echo "Looking into CNAME Records..."
 
 
-                cat ./$domain/$foldername/mass.txt >> ./$domain/$foldername/temp.txt
-                cat ./$domain/$foldername/domaintemp.txt >> ./$domain/$foldername/temp.txt
+                # cat ./$domain/$foldername/mass.txt >> ./$domain/$foldername/temp.txt
+                # cat ./$domain/$foldername/domaintemp.txt >> ./$domain/$foldername/temp.txt
                 cat ./$domain/$foldername/crtsh.txt >> ./$domain/$foldername/temp.txt
 
 
@@ -320,7 +329,7 @@ done
 echo "</pre>" >> ./$domain/$foldername/reports/$subdomain.html
 echo "<h2>NMAP Results</h2>
 <pre>
-$(nmap -sV -T3 -Pn -p2075,2076,6443,3868,3366,8443,8080,9443,9091,3000,8000,5900,8081,6000,10000,8181,3306,5000,4000,8888,5432,15672,9999,161,4044,7077,4040,9000,8089,443,7447,7080,8880,8983,5673,7443,19000,19080 $subdomain  |  grep -E 'open|filtered|closed')
+$(nmap -sCV -T2 -Pn -p2075,2076,6443,3868,3366,8443,8080,9443,9091,3000,8000,5900,8081,6000,10000,8181,3306,5000,4000,8888,5432,15672,9999,161,4044,7077,4040,9000,8089,443,7447,7080,8880,8983,5673,7443,19000,19080 $subdomain  |  grep -E 'open|filtered|closed')
 </pre>
 </div></article></div>
 </div></div></body></html>" >> ./$domain/$foldername/reports/$subdomain.html
@@ -420,7 +429,7 @@ $(host $domain)
 
 echo "<h2>NMAP Results</h2>
 <pre>
-$(nmap -sV -T3 -Pn -p3868,3366,8443,8080,9443,9091,3000,8000,5900,8081,6000,10000,8181,3306,5000,4000,8888,5432,15672,9999,161,4044,7077,4040,9000,8089,443,7447,7080,8880,8983,5673,7443,19000,19080 $domain |  grep -E 'open|filtered|closed')
+$(nmap -sCV -T2 -Pn -p3868,3366,8443,8080,9443,9091,3000,8000,5900,8081,6000,10000,8181,3306,5000,4000,8888,5432,15672,9999,161,4044,7077,4040,9000,8089,443,7447,7080,8880,8983,5673,7443,19000,19080 $domain |  grep -E 'open|filtered|closed')
 </pre>
 </div></article></div>
 </div></div></body></html>" >> ./$domain/$foldername/master_report.html
@@ -438,13 +447,13 @@ logo(){
 \____/\_/ \|\____//_/   \_/\_\\\____\\\____/\____/\_/  \\|
 ${reset}                                                      "
 }
-cleandirsearch(){
-	cat ./$domain/$foldername/urllist.txt | sed 's/\http\:\/\///g' |  sed 's/\https\:\/\///g' | sort -u | while read line; do
-  [ -d ~/tools/dirsearch/reports/$line/ ] && ls ~/tools/dirsearch/reports/$line/ | grep -v old | while read i; do
-  mv ~/tools/dirsearch/reports/$line/$i ~/tools/dirsearch/reports/$line/$i.old
-  done
-  done
-  }
+# cleandirsearch(){
+# 	cat ./$domain/$foldername/urllist.txt | sed 's/\http\:\/\///g' |  sed 's/\https\:\/\///g' | sort -u | while read line; do
+#   [ -d ~/tools/dirsearch/reports/$line/ ] && ls ~/tools/dirsearch/reports/$line/ | grep -v old | while read i; do
+#   mv ~/tools/dirsearch/reports/$line/$i ~/tools/dirsearch/reports/$line/$i.old
+#   done
+#   done
+#   }
 cleantemp(){
 
     rm ./$domain/$foldername/temp.txt
@@ -476,7 +485,7 @@ fi
   mkdir ./$domain/$foldername/wayback-data/
   mkdir ./$domain/$foldername/screenshots/
   touch ./$domain/$foldername/crtsh.txt
-  touch ./$domain/$foldername/mass.txt
+  #touch ./$domain/$foldername/mass.txt
   touch ./$domain/$foldername/cnames.txt
   touch ./$domain/$foldername/pos.txt
   touch ./$domain/$foldername/alldomains.txt
